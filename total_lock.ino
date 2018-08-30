@@ -2,6 +2,13 @@
 #include <SPI.h>
 #include <RFID.h>
 #include <IRremote.h>
+#include <Adafruit_Fingerprint.h>
+#include <SoftwareSerial.h>
+
+//finger
+SoftwareSerial mySerial(2, 3);//(Rx, Tx)
+
+Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 
 const int ledPin=7;//led灯 用于测试
 const int RECV_PIN = 8; // 红外一体化接收头
@@ -53,6 +60,15 @@ char bluetoothVal;//储存蓝牙接收的信号
 void setup()
 {
   Serial.begin(115200);
+  while (!Serial);
+
+  // set the data rate for the sensor serial port
+  finger.begin(57600);
+  
+  //if (finger.verifyPassword()) {
+    //Serial.println("Found fingerprint sensor!");
+  //}
+  
   SPI.begin();
   rfid.init(); //初始化
   myservo.attach(servoPin);
@@ -62,6 +78,7 @@ void setup()
 
 void loop()
 {
+  fingerDetect();
   rfidCard();
   touchSwitch();
   IRremote();
@@ -90,14 +107,18 @@ void openDoor()
   myservo.detach();
 }
 
-//led闪烁
-void ledBlink()
+//led开
+void ledOn()
 {
   digitalWrite(ledPin,HIGH);
-  Serial.println("Blink");
-  delay(2000);
+  Serial.println("Led ON");
+}
+
+//led关
+void ledOff()
+{
   digitalWrite(ledPin,LOW);
-  
+  Serial.println("Led OFF");
 }
 
 //校园卡刷卡模块
@@ -141,8 +162,9 @@ void rfidCard()
     if(find_card)
     {
       Serial.println("Hello,my host.");
+      ledOn();
       openDoor();
-      ledBlink();
+      ledOff();
     }
     else
        Serial.println("Sorry,you are not authorized");
@@ -174,8 +196,9 @@ void touchSwitch()
   if(digitalRead(touch))
   {
     Serial.println("Be touched");
+    ledOn();
     openDoor();
-    ledBlink();
+    ledOff();
     //delay(1000);
   }
 }
@@ -187,8 +210,9 @@ if (irrecv.decode(&results))
 if(results.value == 0xFD00FF ||results.value == 0xFFA25D ) //接收到电源键按下的命令
 {
     Serial.println("IRrecv Received");
+    ledOn();
     openDoor();
-    ledBlink();
+    ledOff();
     //delay(1000);
 }
 irrecv.resume(); // 接收下一个编码
@@ -201,9 +225,38 @@ void bluetooth(){
   if(bluetoothVal=='w')
 {
     Serial.println("Bluetooth Received");
+    ledOn();
     openDoor();
-    ledBlink();
+    ledOff();
     //delay(1000);
   } 
+}
+
+void fingerDetect()
+{
+  int id = getFingerprintIDez();
+  if(id >= 0)
+  {
+    ledOn();
+    openDoor();
+    ledOff();
+  }
+}
+
+// returns -1 if failed, otherwise returns ID #
+int getFingerprintIDez() {
+  uint8_t p = finger.getImage();
+  if (p != FINGERPRINT_OK)  return -1;
+
+  p = finger.image2Tz();
+  if (p != FINGERPRINT_OK)  return -1;
+
+  p = finger.fingerFastSearch();
+  if (p != FINGERPRINT_OK)  return -1;
+  
+  // found a match!
+  Serial.print("Found ID #"); Serial.print(finger.fingerID); 
+  Serial.print(" with confidence of "); Serial.println(finger.confidence);
+  return finger.fingerID; 
 }
 
